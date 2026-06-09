@@ -1,192 +1,139 @@
 ﻿#include "GameScene2D.h"
 
 #include "../Input/InputManager.h"
-#include "../Collision/Collision2D.h"
-#include "../Common/Constants.h"
 #include "SceneManager.h"
 
-#include <algorithm>
-#include <cstdlib>
 #include <DxLib.h>
 
-/**
- * @brief 2Dゲームシーンを生成
- * @param sceneManager シーン遷移を依頼する先のマネージャー
- * @return なし。
- */
+static bool IsHit(float ax, float ay, int aw, float bx, float by, int bw)
+{
+    return ax < bx + bw && ax + aw > bx && ay < by + bw && ay + aw > by;
+}
+
 GameScene2D::GameScene2D(SceneManager* sceneManager)
     : BaseScene(sceneManager)
+    , score_(0)
+    , enemy2HpMirror_(0)
 {
 }
 
-/**
- * @brief 2Dゲームシーンを破棄
- * @return なし。
- */
 GameScene2D::~GameScene2D() = default;
 
-/**
- * @brief 2Dゲームシーンの初期化
- * @return なし。
- */
 void GameScene2D::Init()
 {
-    // プレイヤーの初期位置・速度・サイズを設定
-    playerX_ = 640.0f;
-    playerY_ = 360.0f;
-    playerSpeed_ = 5.0f;
-    playerSize_ = 50;
     score_ = 0;
+    enemy2HpMirror_ = 4;
 
-    // アイテムをランダム配置
-    itemSize_ = 30;
-    itemX_ = static_cast<float>(rand() % (Constants::SCREEN_WIDTH - itemSize_));
-    itemY_ = static_cast<float>(rand() % (Constants::SCREEN_HEIGHT - itemSize_));
-    itemActive_ = true;
+    player_.Init();
+    enemy1_.Init(210.0f, 80.0f);
+    enemy2_.Init(850.0f, 120.0f);
+    enemy2_.SetExternalHp(&enemy2HpMirror_);
 
-    // 障害物をランダム配置（プレイヤー初期位置から200px以上離す）
-    obstacleSize_ = 60;
-    do
+    for (int i = 0; i < maxBulletCount; ++i)
     {
-        obstacleX_ = static_cast<float>(rand() % (Constants::SCREEN_WIDTH - obstacleSize_));
-        obstacleY_ = static_cast<float>(rand() % (Constants::SCREEN_HEIGHT - obstacleSize_));
+        playerBullets_[i].Deactivate();
+    }
 
-        const float diffX = obstacleX_ - playerX_;
-        const float diffY = obstacleY_ - playerY_;
-        if (diffX * diffX + diffY * diffY >= 200.0f * 200.0f)
-        {
-            break;
-        }
-    } while (true);
+    for (int i = 0; i < static_cast<int>(enemyBullets_.size()); ++i)
+    {
+        enemyBullets_[i].Deactivate();
+        enemyBullets_[i].SetTarget(player_.GetXAddress());
+    }
 }
 
-/**
- * @brief 2Dゲームシーンの更新処理
- * @return なし。
- */
 void GameScene2D::Update()
 {
-    // プレイヤーが移動する前の座標を保存
-    // 移動量を調べて、どちらの方向からぶつかったか判定するために使用
-    const float prevX = playerX_;
-    const float prevY = playerY_;
+    player_.update(playerBullets_.data(), static_cast<int>(playerBullets_.size()));
+    enemy1_.update(enemyBullets_.data(), static_cast<int>(enemyBullets_.size()));
+    enemy2_.update(enemyBullets_.data(), static_cast<int>(enemyBullets_.size()));
 
-    // 矢印キーが押されている間、プレイヤーを上下左右に移動
-    InputManager& input = InputManager::GetInstance();
-    if (input.IsKeyHeld(KEY_INPUT_LEFT))
+    for (int i = 0; i < static_cast<int>(playerBullets_.size()); ++i)
     {
-        playerX_ -= playerSpeed_;
-    }
-    if (input.IsKeyHeld(KEY_INPUT_RIGHT))
-    {
-        playerX_ += playerSpeed_;
+        playerBullets_[i].update();
     }
 
-    // まずは横方向の移動だけを画面内に収める
-    playerX_ = std::clamp(playerX_, 0.0f, static_cast<float>(Constants::SCREEN_WIDTH) - static_cast<float>(playerSize_));
-
-    // 横方向で障害物にぶつかったら、障害物の端にぴったり接する位置へ補正
-    if (Collision2D::SquareToSquare(playerX_, prevY, playerSize_, obstacleX_, obstacleY_, obstacleSize_))
+    for (int i = 0; i < static_cast<int>(enemyBullets_.size()); ++i)
     {
-        if (playerX_ > prevX)
+        enemyBullets_[i].update();
+    }
+
+    for (int i = 0; i < static_cast<int>(playerBullets_.size()); ++i)
+    {
+        if (!playerBullets_[i].IsActive())
         {
-            playerX_ = obstacleX_ - static_cast<float>(playerSize_);
+            continue;
         }
-        else if (playerX_ < prevX)
+
+        if (enemy1_.IsAlive() && IsHit(
+            playerBullets_[i].GetX(),
+            playerBullets_[i].GetY(),
+            playerBullets_[i].GetSize(),
+            enemy1_.GetX(),
+            enemy1_.GetY(),
+            enemy1_.GetSize()))
         {
-            playerX_ = obstacleX_ + static_cast<float>(obstacleSize_);
+            enemy1_.Damage(1);
+            playerBullets_[i].Deactivate();
+            score_ += 10;
         }
-    }
 
-    if (input.IsKeyHeld(KEY_INPUT_UP))
-    {
-        playerY_ -= playerSpeed_;
-    }
-    if (input.IsKeyHeld(KEY_INPUT_DOWN))
-    {
-        playerY_ += playerSpeed_;
-    }
-
-    // 次に縦方向の移動だけを画面内に収める
-    playerY_ = std::clamp(playerY_, 0.0f, static_cast<float>(Constants::SCREEN_HEIGHT) - static_cast<float>(playerSize_));
-
-    // 縦方向で障害物にぶつかったら、障害物の端にぴったり接する位置へ補正
-    if (Collision2D::SquareToSquare(playerX_, playerY_, playerSize_, obstacleX_, obstacleY_, obstacleSize_))
-    {
-        if (playerY_ > prevY)
+        if (enemy2_.IsAlive() && playerBullets_[i].IsActive() && IsHit(
+            playerBullets_[i].GetX(),
+            playerBullets_[i].GetY(),
+            playerBullets_[i].GetSize(),
+            enemy2_.GetX(),
+            enemy2_.GetY(),
+            enemy2_.GetSize()))
         {
-            playerY_ = obstacleY_ - static_cast<float>(playerSize_);
-        }
-        else if (playerY_ < prevY)
-        {
-            playerY_ = obstacleY_ + static_cast<float>(obstacleSize_);
+            enemy2_.Damage(1);
+            playerBullets_[i].Deactivate();
+            score_ += 20;
         }
     }
 
-    // 念のため、補正後の座標も画面内に収める
-    playerX_ = std::clamp(playerX_, 0.0f, static_cast<float>(Constants::SCREEN_WIDTH) - static_cast<float>(playerSize_));
-    playerY_ = std::clamp(playerY_, 0.0f, static_cast<float>(Constants::SCREEN_HEIGHT) - static_cast<float>(playerSize_));
-
-    // アイテムと重なったら取得成功
-    // いったん非表示にしてスコアを増やし、そのあと新しい場所に再配置
-    if (itemActive_ && Collision2D::SquareToSquare(playerX_, playerY_, playerSize_, itemX_, itemY_, itemSize_))
+    for (int i = 0; i < static_cast<int>(enemyBullets_.size()); ++i)
     {
-        itemActive_ = false;
-        score_ += 1;
-        itemX_ = static_cast<float>(rand() % (Constants::SCREEN_WIDTH - itemSize_));
-        itemY_ = static_cast<float>(rand() % (Constants::SCREEN_HEIGHT - itemSize_));
-        itemActive_ = true;
+        if (enemyBullets_[i].IsActive() && player_.IsAlive() && IsHit(
+            enemyBullets_[i].GetX(),
+            enemyBullets_[i].GetY(),
+            enemyBullets_[i].GetSize(),
+            player_.GetX(),
+            player_.GetY(),
+            player_.GetSize()))
+        {
+            player_.Damage(1);
+            enemyBullets_[i].Deactivate();
+        }
     }
 
-    // Enterキーを押した瞬間に3Dゲームシーンへ遷移
-    if (input.IsKeyPressed(KEY_INPUT_RETURN))
+    if (InputManager::GetInstance().IsKeyPressed(KEY_INPUT_RETURN))
     {
-        sceneManager_->ChangeScene(SceneID::Game3D);
+        sceneManager_->ChangeScene(SceneID::Result);
     }
-
-    // TODO: アイテムの数を増やして配列で管理してみよう
-    // TODO: 障害物に当たったらスコアを減らすなど、ルールを追加してみよう
 }
 
-/**
- * @brief 2Dゲームシーンの描画処理
- * @return なし。
- */
 void GameScene2D::Draw()
 {
-    // 障害物は灰色の四角形として描画
-    DrawBox(
-        static_cast<int>(obstacleX_),
-        static_cast<int>(obstacleY_),
-        static_cast<int>(obstacleX_) + obstacleSize_,
-        static_cast<int>(obstacleY_) + obstacleSize_,
-        GetColor(128, 128, 128),
-        TRUE);
+    DrawString(10, 10, "Arrow keys: move  Space/Z: shot  Enter: result", GetColor(255, 255, 255));
+    DrawFormatString(10, 58, GetColor(255, 255, 255), "Score: %d", score_);
 
-    // アイテムが有効なときだけ、黄色の四角形を表示
-    if (itemActive_)
+    enemy1_.draw();
+    enemy2_.draw();
+
+    for (int i = 0; i < static_cast<int>(playerBullets_.size()); ++i)
     {
-        DrawBox(
-            static_cast<int>(itemX_),
-            static_cast<int>(itemY_),
-            static_cast<int>(itemX_) + itemSize_,
-            static_cast<int>(itemY_) + itemSize_,
-            GetColor(255, 255, 0),
-            TRUE);
+        playerBullets_[i].draw();
     }
 
-    // プレイヤーは赤色の四角形として描画
-    DrawBox(
-        static_cast<int>(playerX_),
-        static_cast<int>(playerY_),
-        static_cast<int>(playerX_) + playerSize_,
-        static_cast<int>(playerY_) + playerSize_,
-        GetColor(255, 0, 0),
-        TRUE);
+    for (int i = 0; i < static_cast<int>(enemyBullets_.size()); ++i)
+    {
+        enemyBullets_[i].draw();
+    }
 
-    // 現在のスコアを画面の左上に表示
-    DrawFormatString(10, 10, GetColor(255, 255, 255), "Score: %d", score_);
+    player_.draw();
 
-    // 次のシーンへの案内を表示
-    DrawString(10, 40, "Press ENTER to 3D Scene", GetColor(255, 255, 0));
+    if (!player_.IsAlive())
+    {
+        DrawString(560, 350, "PLAYER DOWN", GetColor(255, 64, 64));
+    }
 }

@@ -96,6 +96,21 @@
     <ClCompile Include="src\Sprite\Sprite.cpp">
       <Filter>src\Sprite</Filter>
     </ClCompile>
+    <ClCompile Include="src\Game\Enemy1.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Game\Enemy2.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Game\EnemyBullet.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Game\Player.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Game\PlayerBullet.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\Audio\AudioManager.h">
@@ -160,6 +175,21 @@
     </ClInclude>
     <ClInclude Include="src\Sprite\Sprite.h">
       <Filter>src\Sprite</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Game\Enemy1.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Game\Enemy2.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Game\EnemyBullet.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Game\Player.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Game\PlayerBullet.h">
+      <Filter>src</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
